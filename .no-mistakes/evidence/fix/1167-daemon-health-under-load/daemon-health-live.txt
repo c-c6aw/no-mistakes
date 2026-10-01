@@ -1,0 +1,41 @@
+[ready] no-mistakes daemon status; timeout override=None; exit=0; elapsed=0.011s
+  ● daemon running (pid 33970)
+
+
+[base reproduces issue after 250ms] base-ensure ; timeout override=None; exit=1; elapsed=0.594s
+read response: daemon health did not reply within 250ms (run 'no-mistakes daemon start' to recover)
+
+
+[default 3s accepts 1s delay] ensure ; timeout override=None; exit=0; elapsed=1.056s
+EnsureDaemon: existing daemon healthy; no replacement launched
+
+
+[daemon status accepts 1s delay] no-mistakes daemon status; timeout override=None; exit=0; elapsed=1.077s
+  ● daemon running (pid 33970)
+
+
+[wedged daemon bounded by default 3s] ensure ; timeout override=None; exit=1; elapsed=3.025s
+read response: daemon health did not reply within 3s; the daemon is running but slow to respond (the host may be overloaded) - retry, or raise daemon_connect_timeout in config.yaml or NM_DAEMON_CONNECT_TIMEOUT
+
+
+[env 100ms produces safe slow-daemon hint] ensure ; timeout override={'NM_DAEMON_CONNECT_TIMEOUT': '100ms'}; exit=1; elapsed=0.122s
+read response: daemon health did not reply within 100ms; the daemon is running but slow to respond (the host may be overloaded) - retry, or raise daemon_connect_timeout in config.yaml or NM_DAEMON_CONNECT_TIMEOUT
+
+
+[config 150ms governs health] ensure ; timeout override=None; exit=1; elapsed=0.172s
+read response: daemon health did not reply within 150ms; the daemon is running but slow to respond (the host may be overloaded) - retry, or raise daemon_connect_timeout in config.yaml or NM_DAEMON_CONNECT_TIMEOUT
+
+
+[env overrides config to tolerate 1s delay] ensure ; timeout override={'NM_DAEMON_CONNECT_TIMEOUT': '2s'}; exit=0; elapsed=1.076s
+EnsureDaemon: existing daemon healthy; no replacement launched
+
+
+[same daemon survives all health timeouts] no-mistakes daemon status; timeout override=None; exit=0; elapsed=0.026s
+  ● daemon running (pid 33970)
+
+
+Original foreground daemon PID 33970 still running; no replacement or pipeline launched.
+
+[dead socket keeps start recovery hint] ensure ; timeout override=None; exit=1; elapsed=0.010s
+connect to daemon socket: dial ipc: dial unix /Users/kunchen/.no-mistakes/worktrees/4e1218e2705b/01M3WFBY9PM8AEHJAPV0WXXK4Q/.health-check/root/socket: connect: connection refused (run 'no-mistakes daemon start' to recover)
+

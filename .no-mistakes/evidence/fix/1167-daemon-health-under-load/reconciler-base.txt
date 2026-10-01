@@ -1,0 +1,6 @@
+=== RUN   TestHealthLiveValidationReconciler
+    health_live_validation_test.go:39: real daemon's delayed mid-drive health probe rejected: get_active_run timed out and daemon health probe failed: read response: daemon health did not reply within 250ms
+--- FAIL: TestHealthLiveValidationReconciler (1.21s)
+FAIL
+FAIL	github.com/kunchenguid/no-mistakes/internal/cli	1.561s
+FAIL

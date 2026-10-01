@@ -1,0 +1,5 @@
+=== RUN   TestHealthLiveValidationReconciler
+    health_live_validation_test.go:44: Real daemon SIGSTOPped for 1s: 60ms initial read timed out, mid-drive health waited, retried read returned no active run after 1.003746792s.   ● daemon running (pid 69936)
+--- PASS: TestHealthLiveValidationReconciler (1.23s)
+PASS
+ok  	github.com/kunchenguid/no-mistakes/internal/cli	1.520s

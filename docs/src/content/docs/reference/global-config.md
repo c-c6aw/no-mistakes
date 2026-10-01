@@ -620,7 +620,7 @@ It bounds only the Test step, and no other step or environment variable override
 
 ### daemon_connect_timeout
 
-Maximum time a CLI client waits for an existing daemon socket to accept a connection before failing instead of hanging. Guards against a daemon process that is alive but stuck or unresponsive.
+Maximum time a CLI client waits for an existing daemon socket to accept a connection, and then for the daemon to answer its health check, before failing instead of hanging. Guards against a daemon process that is alive but stuck or unresponsive. On a heavily loaded host a healthy daemon can take longer than usual to answer; raise this value instead of restarting the daemon, which would stop every in-flight run.
 
 |         |                        |
 | ------- | ---------------------- |

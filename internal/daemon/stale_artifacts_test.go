@@ -172,3 +172,32 @@ func TestIsRunningStaleProbeKeepsArtifactsOfADaemonThatJustStarted(t *testing.T)
 		t.Fatalf("artifacts removed: socket=%v pid=%v", socket, pid)
 	}
 }
+
+// A probe holds the singleton lock while it re-checks and removes a dead
+// daemon's artifacts; a daemon starting in that window waits it out instead of
+// exiting as "already running".
+func TestStartingDaemonWaitsOutTheCleanupLockWindow(t *testing.T) {
+	p := staleDaemonRoot(t, []byte(`{"pid":424242,"started_at":"2026-04-20T10:00:00Z"}`))
+	cleanupHolder, err := os.OpenFile(p.LockFile(), os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tryLockFile(cleanupHolder); err != nil {
+		cleanupHolder.Close()
+		t.Fatal(err)
+	}
+	released := make(chan struct{})
+	go func() {
+		defer close(released)
+		time.Sleep(50 * time.Millisecond)
+		_ = unlockFile(cleanupHolder)
+		_ = cleanupHolder.Close()
+	}()
+
+	lock, err := acquireSingletonLock(p)
+	<-released
+	if err != nil {
+		t.Fatalf("starting daemon refused during the cleanup window: %v", err)
+	}
+	lock.Release()
+}

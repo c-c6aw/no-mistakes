@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -870,23 +871,18 @@ func waitForDaemonStop(p *paths.Paths, instance daemonInstance) error {
 }
 
 // clearDeadDaemonArtifacts removes the socket and PID file of a daemon that
-// is provably gone: no process holds the NM_HOME singleton lock, and the PID
-// file names a process that no longer exists or whose start time no longer
-// matches. A live or unverifiable PID leaves everything in place. Holding the
-// lock while clearing keeps a daemon that is starting up right now from
-// losing the socket it just bound.
+// is provably gone: the PID file names a process that no longer exists or
+// whose start time no longer matches, and no process holds the NM_HOME
+// singleton lock. A live or unverifiable PID leaves everything in place. The
+// lock is held only to re-check the PID file and remove the artifacts, so a
+// daemon that is starting up is neither blocked by the inspection nor loses
+// the socket it just bound.
 func clearDeadDaemonArtifacts(p *paths.Paths) (bool, error) {
-	f, err := os.OpenFile(p.LockFile(), os.O_CREATE|os.O_RDWR, 0o644)
+	data, err := os.ReadFile(p.PIDFile())
 	if err != nil {
-		return false, fmt.Errorf("open daemon lock: %w", err)
+		return false, fmt.Errorf("read pid file: %w", err)
 	}
-	defer f.Close()
-	if err := tryLockFile(f); err != nil {
-		return false, nil
-	}
-	defer func() { _ = unlockFile(f) }()
-
-	record, err := readDaemonPIDFile(p.PIDFile())
+	record, err := readDaemonPIDFileData(data)
 	if err != nil {
 		return false, fmt.Errorf("read pid file: %w", err)
 	}
@@ -909,6 +905,20 @@ func clearDeadDaemonArtifacts(p *paths.Paths) (bool, error) {
 		if diff <= orphanStartTimeTolerance {
 			return false, nil
 		}
+	}
+
+	f, err := os.OpenFile(p.LockFile(), os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return false, fmt.Errorf("open daemon lock: %w", err)
+	}
+	defer f.Close()
+	if err := tryLockFile(f); err != nil {
+		return false, nil
+	}
+	defer func() { _ = unlockFile(f) }()
+	current, err := os.ReadFile(p.PIDFile())
+	if err != nil || !bytes.Equal(current, data) {
+		return false, nil
 	}
 	cleanupDaemonArtifacts(p)
 	return true, nil

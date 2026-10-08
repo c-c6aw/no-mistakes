@@ -130,3 +130,45 @@ func TestWaitForDaemonStopAcceptsExitedDaemonThatLeftItsArtifacts(t *testing.T) 
 		t.Fatalf("stale artifacts remain: socket=%v pid=%v", socket, pid)
 	}
 }
+
+// A probe inspecting a stale PID must not hold the singleton lock, or a
+// daemon starting at that moment would refuse to run.
+func TestIsRunningStaleProbeDoesNotBlockAStartingDaemon(t *testing.T) {
+	p := staleDaemonRoot(t, []byte(`{"pid":424242,"started_at":"2026-04-20T10:00:00Z"}`))
+	oldRunning := daemonProcessRunning
+	daemonProcessRunning = func(int) (bool, error) {
+		lock, err := acquireSingletonLock(p)
+		if err != nil {
+			t.Errorf("daemon starting during inspection: %v", err)
+			return false, nil
+		}
+		lock.Release()
+		return false, nil
+	}
+	t.Cleanup(func() { daemonProcessRunning = oldRunning })
+
+	if alive, err := IsRunning(p); err != nil || alive {
+		t.Fatalf("IsRunning = (%v, %v), want (false, nil)", alive, err)
+	}
+}
+
+// A daemon that started between the inspection and the removal rewrote the
+// PID file; its artifacts stay.
+func TestIsRunningStaleProbeKeepsArtifactsOfADaemonThatJustStarted(t *testing.T) {
+	p := staleDaemonRoot(t, []byte(`{"pid":424242,"started_at":"2026-04-20T10:00:00Z"}`))
+	oldRunning := daemonProcessRunning
+	daemonProcessRunning = func(int) (bool, error) {
+		if err := os.WriteFile(p.PIDFile(), []byte(`{"pid":515151,"started_at":"2026-04-20T11:00:00Z"}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return false, nil
+	}
+	t.Cleanup(func() { daemonProcessRunning = oldRunning })
+
+	if alive, err := IsRunning(p); err == nil || alive {
+		t.Fatalf("IsRunning = (%v, %v), want a connect error", alive, err)
+	}
+	if socket, pid := artifactsExist(p); !socket || !pid {
+		t.Fatalf("artifacts removed: socket=%v pid=%v", socket, pid)
+	}
+}

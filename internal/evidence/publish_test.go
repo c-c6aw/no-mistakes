@@ -451,12 +451,18 @@ func TestPublish_ExcludedDirectoryAlonePublishesNothing(t *testing.T) {
 // Captured command output carries absolute paths under the operator's home, so
 // a text file gets the same home-directory redaction the PR body gets before it
 // reaches the branch. A binary artifact and the local file are left as written.
+// Each binary fixture trips exactly one of the two binary checks, so removing
+// either check fails this test.
 func TestPublish_RedactsHomePathsInTextEvidence(t *testing.T) {
 	remote, work := newRepoWithRemote(t)
-	const binary = "\x89PNG /home/alice/shot\x00\x01"
+	binaries := map[string]string{
+		"nul.bin":     "valid utf-8 /home/alice/shot\x00 with a nul",
+		"invalid.bin": "\x89PNG /home/alice/shot without a nul",
+	}
 	const text = "ran /home/alice/project/bin/tool\nwrote /Users/alice/out.json\n"
 	source := writeEvidence(t, t.TempDir(), map[string]string{
-		"checkout.png": binary,
+		"nul.bin":      binaries["nul.bin"],
+		"invalid.bin":  binaries["invalid.bin"],
 		"logs/run.txt": text,
 	})
 
@@ -469,10 +475,12 @@ func TestPublish_RedactsHomePathsInTextEvidence(t *testing.T) {
 	if want := "ran ~/project/bin/tool\nwrote ~/out.json"; got != want {
 		t.Errorf("published text = %q, want %q", got, want)
 	}
-	cmd := exec.Command("git", "cat-file", "blob", prefix+"checkout.png")
-	cmd.Dir = remote
-	if out, err := cmd.Output(); err != nil || string(out) != binary {
-		t.Errorf("published binary = %q (%v), want it byte for byte", out, err)
+	for name, binary := range binaries {
+		cmd := exec.Command("git", "cat-file", "blob", prefix+name)
+		cmd.Dir = remote
+		if out, err := cmd.Output(); err != nil || string(out) != binary {
+			t.Errorf("published %s = %q (%v), want it byte for byte", name, out, err)
+		}
 	}
 	if local, err := os.ReadFile(filepath.Join(source, "logs", "run.txt")); err != nil || string(local) != text {
 		t.Errorf("local evidence = %q (%v), want it untouched", local, err)

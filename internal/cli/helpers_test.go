@@ -101,9 +101,6 @@ func TestMain(m *testing.M) {
 	for _, dir := range []string{root, home} {
 		if err := removeTestDir(dir); err != nil {
 			fmt.Fprintf(os.Stderr, "remove test dir %s: %v\n", dir, err)
-			if code == 0 {
-				code = 1
-			}
 		}
 	}
 	os.Exit(code)

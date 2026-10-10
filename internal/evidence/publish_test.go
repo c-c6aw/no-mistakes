@@ -456,12 +456,12 @@ func TestPublish_ExcludedDirectoryAlonePublishesNothing(t *testing.T) {
 func TestPublish_RedactsHomePathsInTextEvidence(t *testing.T) {
 	remote, work := newRepoWithRemote(t)
 	binaries := map[string]string{
-		"nul.bin":     "valid utf-8 /home/alice/shot\x00 with a nul",
-		"invalid.bin": "\x89PNG /home/alice/shot without a nul",
+		"nul-byte.bin": "valid utf-8 /home/alice/shot\x00 with a nul",
+		"invalid.bin":  "\x89PNG /home/alice/shot without a nul",
 	}
 	const text = "ran /home/alice/project/bin/tool\nwrote /Users/alice/out.json\n"
 	source := writeEvidence(t, t.TempDir(), map[string]string{
-		"nul.bin":      binaries["nul.bin"],
+		"nul-byte.bin": binaries["nul-byte.bin"],
 		"invalid.bin":  binaries["invalid.bin"],
 		"logs/run.txt": text,
 	})

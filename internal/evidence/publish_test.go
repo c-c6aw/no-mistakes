@@ -388,8 +388,8 @@ func TestPublish_ReportsPublishedFilesRelativeToTheSourceDirectory(t *testing.T)
 // conversation depends on. Its files live in the run's evidence directory - the
 // PR step's `ExcludeDirs` names them - but they are NOT test evidence: publishing
 // them would put the operator's questions and answers on the orphan branch
-// verbatim and permanently, with none of the bounding or home-path redaction the
-// deliberate PR-body rendering applies.
+// permanently, with none of the bounding the deliberate PR-body rendering
+// applies.
 //
 // The exclusion has to skip the directory WHOLE, not filter its files out at the
 // end, because an excluded file must not count against the publication budgets
@@ -445,5 +445,36 @@ func TestPublish_ExcludedDirectoryAlonePublishesNothing(t *testing.T) {
 	}
 	if refs := runGit(t, remote, "for-each-ref", "--format=%(refname)"); refs != "refs/heads/main" {
 		t.Fatalf("remote refs changed: %q", refs)
+	}
+}
+
+// Captured command output carries absolute paths under the operator's home, so
+// a text file gets the same home-directory redaction the PR body gets before it
+// reaches the branch. A binary artifact and the local file are left as written.
+func TestPublish_RedactsHomePathsInTextEvidence(t *testing.T) {
+	remote, work := newRepoWithRemote(t)
+	const binary = "\x89PNG /home/alice/shot\x00\x01"
+	const text = "ran /home/alice/project/bin/tool\nwrote /Users/alice/out.json\n"
+	source := writeEvidence(t, t.TempDir(), map[string]string{
+		"checkout.png": binary,
+		"logs/run.txt": text,
+	})
+
+	result, err := Publish(context.Background(), baseRequest(remote, work, source))
+	if err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	prefix := result.CommitSHA + ":.no-mistakes/evidence/fm/add-login/"
+	got := runGit(t, remote, "cat-file", "-p", prefix+"logs/run.txt")
+	if want := "ran ~/project/bin/tool\nwrote ~/out.json"; got != want {
+		t.Errorf("published text = %q, want %q", got, want)
+	}
+	cmd := exec.Command("git", "cat-file", "blob", prefix+"checkout.png")
+	cmd.Dir = remote
+	if out, err := cmd.Output(); err != nil || string(out) != binary {
+		t.Errorf("published binary = %q (%v), want it byte for byte", out, err)
+	}
+	if local, err := os.ReadFile(filepath.Join(source, "logs", "run.txt")); err != nil || string(local) != text {
+		t.Errorf("local evidence = %q (%v), want it untouched", local, err)
 	}
 }
